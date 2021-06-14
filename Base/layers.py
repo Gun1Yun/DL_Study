@@ -1,5 +1,51 @@
 from config import *
 
+# MSE for Loss
+def MSE(y, t):
+    return 0.5 * np.mean((y-t)**2)
+
+# ReLU activation function
+class ReLU:
+    def __init__(self):
+        self.mask = None
+    
+    def forward(self, x):
+        self.mask = (x<=0)
+        y = x.copy()
+        y[self.mask] = 0
+        return y
+
+    def backward(self, dy):
+        dy[self.mask] = 0
+        dx = dy
+        return dx
+
+# Loss with ReLU
+class ReluWithLoss:
+    def __init__(self):
+        self.params, self.grads = [], []
+        self.activation = ReLU()
+        self.cache = None
+
+    def forward(self, x, t):
+        N, V = x.shape      # batch, output
+        
+        x = x.reshape(N, V)
+        t = t.reshape(N, V)
+        x = self.activation.forward(x)
+
+        loss = MSE(x, t)
+        self.cache = (t, x, (N, V))
+        return loss
+
+    def backward(self, dy=1):
+        t, x, (N, V) = self.cache
+        dx = dy * (x-t) / N
+        
+        dx = self.activation.backward(dx)
+        dx = dx.reshape(N, V)
+        return dx
+
 
 class FullyConnected:
     def __init__(self, W, b):
@@ -169,7 +215,69 @@ class Pooling:
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+        
+class TimeFC:
+    def __init__(self, W, b):
+        self.params = [W, b]
+        self.grads = [np.zeros_like(W), np.zeros_like(b)]
+        self.x = None
 
+    def forward(self, x):
+        W, b = self.params
+        N, D = x.shape
+
+        reshaped_x = x.reshape(N, -1)
+        y = np.dot(reshaped_x, W) + b
+        
+        self.x = x
+        y = y.reshape(N, -1)
+        return y
+
+    def backward(self, dy):
+        W, b = self.params
+        x = self.x
+        N, D = x.shape
+
+        dy = dy.reshape(N, -1)
+        reshaped_x = x.reshape(N, -1)
+
+        db = np.sum(dy, axis=0)
+        dx = np.matmul(dy, W.T)
+        dW = np.matmul(reshaped_x.T, dy)
+        
+        dx = dx.reshape(*x.shape)
+
+        self.grads[0][...] = dW
+        self.grads[1][...] = db
+
+        return dx
+
+class TimeMSE:
+    def __init__(self):
+        self.params, self.grads = [], []
+        self.activation = ReLU()
+        self.cache = None
+
+    def forward(self, xs, ts):
+        N, V = xs.shape
+        xs = xs.reshape(N, V)
+        xs = self.activation.forward(xs)
+        ts = ts.reshape(N, V)
+
+        loss = MSE(xs, ts)
+        self.cache = (ts, xs, (N, V))
+
+        return loss
+
+    def backward(self, dy = 1):
+
+        ts, xs, (N,  V) = self.cache
+        
+        dx = dy * (xs - ts) / (N)
+
+        dx = self.activation.backward(dx)
+        dx = dx.reshape(N , V)
+        return dx
 
 class LSTM:
     def __init__(self, Wx, Wh, b):
