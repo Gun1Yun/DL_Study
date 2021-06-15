@@ -1,4 +1,7 @@
+import numpy
+import time
 from config import *
+from optim import Adam
 from layers import *
 
 # CNN regression models
