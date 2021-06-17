@@ -9,7 +9,7 @@ class CnnModelReg:
     def __init__(self, input_dim = (1, 24, 8), 
                  params={'filter_num':30, 'filter_size':5, 
                          'padding':0, 'stride':1},
-                 hidden_size=100, output_size=1):
+                 hidden_size=64, output_size=1):
         filter_num = params['filter_num']
         filter_size = params['filter_size']
         padding = params['padding']
@@ -97,7 +97,7 @@ class CnnModelReg:
 
             if verbose:
                 duration = start_time-time.time()
-                print(f'epoch:{epoch}/{epochs}, 시간:{duration:.2f}[s], loss:{avg_loss:.5f}')
+                print(f'epoch:{epoch}/{epochs}, ì‹œê°„:{duration:.2f}[s], loss:{avg_loss:.5f}')
 
 
 
@@ -183,7 +183,7 @@ class LstmModelReg:
 
             if verbose:
                 duration = start_time-time.time()
-                print(f'epoch:{epoch}/{epochs}, 시간:{duration:.2f}[s], loss:{avg_loss:.5f}')
+                print(f'epoch:{epoch}/{epochs}, ì‹œê°„:{duration:.2f}[s], loss:{avg_loss:.5f}')
 
 
     def reset_state(self):
