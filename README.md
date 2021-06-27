@@ -8,6 +8,7 @@ Study deep architectures and concepts.
 
 ## CNN
 - CNN
+- ShuffleNet
   
 ## RNN
 - RNN 
