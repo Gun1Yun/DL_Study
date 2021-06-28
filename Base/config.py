@@ -1,4 +1,4 @@
-GPU = True
+GPU = False
 
 if GPU:
     import cupy as np
