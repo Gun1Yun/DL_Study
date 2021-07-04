@@ -407,3 +407,144 @@ class TimeLSTM:
 
         self.dh = dh
         return dxs
+
+class GRU(object):
+    def __init__(self, Wx, Wh, b):
+        self.params = [Wx, Wh, b]
+        self.grads = [np.zeros_like(Wx), np.zeros_like(Wh), np.zeros_like(b)]
+        self.cache = None
+
+    def affine(self, x, Wx, h, Wh, b):
+        return np.matmul(x, Wx) + np.matmul(h, Wh) + b
+
+    def forward(self, x, h_prev):
+        # GRU doesn't have cell state
+        Wx_, Wh_, b_ = self.params
+        N, H = h_prev.shape
+
+        Wxz, Wxr, Wx = Wx_[:, :H], Wx_[:, H:2*H], Wx_[:, 2*H:]
+        Whz, Whr, Wh = Wh_[:, :H], Wh_[:, H:2*H], Wh_[:, 2*H:]
+        bz, br, b = b_[:, :H], b_[:, H:2*H], b_[:, 2*H:]
+
+        z = sigmoid(self.affine(x, Wxz, h_prev, Whz, bz))
+        r = sigmoid(self.affine(x, Wxr, h_prev, Whr, br))
+        h_hat = np.tanh(self.affine(x, Wx, r*h_prev, Wh, b))
+        h_next = (1-z)*h_prev, z*h_hat
+
+        self.cache = (x, h_prev, z, r, h_hat)
+
+        return h_next
+
+    def backward(self, dh_next):
+        x, h_prev, z, r, h_hat = self.cache
+        Wx_, Wh_, b_ = self.params
+        N, H = h_prev.shape
+
+        Wxz, Wxr, Wx = Wx_[:, :H], Wx_[:, H:2*H], Wx_[:, 2*H:]
+        Whz, Whr, Wh = Wh_[:, :H], Wh_[:, H:2*H], Wh_[:, 2*H:]
+
+        dh_hat = z*dh_next
+        dh_prev = (1-z)*dh_next
+
+        # h_hat
+        # y = h_hat
+        # tanh diff = (1-y**2)
+        dtanh = dh_hat*(1-h_hat**2)
+        dx_hat = np.matmul(dtanh, Wx.T)
+        dWx_hat = np.matmul(x.T, dtanh)
+        dWh_hat = np.matmul((r*h_prev).T, dtanh)
+        db_hat = np.sum(dtanh, axis=0)
+
+        dh_r = np.matmul(dtanh, Wh.T)
+        dh_prev_hat = r*dh_r
+
+        # r
+        dr = dh_r*h_prev
+        drs = dr*r(1-r)
+        dx_r = np.matmul(drs, Wxr.T)
+        dWx_r = np.matmul(x.T, drs)
+        dh_r = np.matmul(drs, Whr.T)
+        dWh_r = np.matmul(h_prev.T, drs)
+        db_r = np.sum(drs, axis=0)
+
+        # z
+        dz = dh_next*h_hat - dh_next*h_prev
+        dzs = dz*z(1-z)
+        dx_z = np.matmul(dzs, Wxz.T)
+        dWx_z = np.matmul(x.T, dzs)
+        dh_z = np.matmul(dzs, Whz.T)
+        dWh_z = np.matmul(h_prev.T, dzs)
+        db_z = np.sum(dzs, axis=0)
+
+        dWx = np.hstack(dWx_hat, dWx_r, dWx_z)
+        dWh = np.hstack(dWh_hat, dWh_r, dWh_z)
+        db = np.hstack(db_hat, db_r, db_z)
+
+        dx = dx_hat + dx_r + dx_z
+        dh_prev += (dh_hat + dh_r + dh_z)
+
+        self.grads[0][...] = dWx
+        self.grads[1][...] = dWh
+        self.grads[2][...] = db
+
+        return dx, dh_prev
+
+
+class TimeGRU(object):
+    def __init__(self, Wx, Wh, b, stateful=False):
+        self.params = [Wx, Wh, b]
+        self.grads = [np.zeros_like(Wx), np.zeros_like(Wh), np.zeros_like(b)]
+        self.layers = None
+        self.h = None
+        self.dh = None
+        self.stateful = stateful
+
+    def set_state(self, h):
+        self.h = h
+
+    def reset_state(self):
+        self.h = None
+
+    def forward(self, xs):
+        # xs is x sequences
+        Wx, Wh, b = self.params
+        N, T, D = xs.shape  # batch, time step, dimension
+        H = Wh.shape[0]     # hidden size
+
+        self.layers = []
+        hs = np.empty((N, T, D), dtype='f')     # save h0 to ht
+
+        # initialize h
+        if not self.stateful or self.h is None:
+            self.h = np.zeros((N, H), dtype='f')
+
+        # loop for time step
+        for t in range(T):
+            layer = GRU(*self.params)
+            self.h = layer.forward(xs[:, t, :], self.h)
+            hs[:, t, :] = self.h
+            self.layers.append(layer)
+
+        return hs
+
+    def backward(self, dhs=1):
+        Wx, Wh, b = self.params
+        N, T, H = dhs.shape
+        D = Wx.shape[0]
+
+        dxs = np.empty((N, T, D), dtype='f')
+        dh = 0
+
+        grads = [0, 0, 0]       # grads for Wx, Wh, b
+        for t in reversed(range(T)):    # backpropagation through time
+            layer = self.layers[t]
+            dx, dh = layer.backward(dhs[:, t, :]+dh)
+            dxs[:, t, :] = dx
+            for i, grad in enumerate(layer.grads):
+                grads[i] += grad
+
+        for i, grad in enumerate(grads):
+            self.grads[i][...] = grad
+
+        self.dh = dh
+        return dxs
