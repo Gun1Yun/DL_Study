@@ -188,3 +188,91 @@ class LstmModelReg:
 
     def reset_state(self):
         self.layers[0].reset_state()
+        
+# GRU Regression model
+class GruModelReg:
+    def __init__(self, time_size, hidden_size, feature_size):
+        T, H, F = time_size, hidden_size, feature_size
+        H2 = 64
+        rand = np.random.randn
+
+        # weights (Xavier)
+        gru_Wx = (rand(F, 4*H)/ np.sqrt(F)).astype('f')
+        gru_Wh = (rand(H, 4*H)/ np.sqrt(H)).astype('f')
+        gru_b = np.zeros(4*H).astype('f')
+
+        # He initialize
+        fc_W1 = (rand(H, H2)/ np.sqrt(H/2)).astype('f')
+        fc_b1 = np.zeros(H2).astype('f')
+
+        fc_W2 = (rand(H2, 1)/ np.sqrt(H2/2)).astype('f')
+        fc_b2 = np.zeros(1).astype('f')
+
+        # layer
+        self.layers = [
+            TimeGRU(gru_Wx, gru_Wh, gru_b, stateful=True),
+            TimeFC(fc_W1, fc_b1),
+            TimeFC(fc_W2, fc_b2)
+        ]
+        self.loss_layer = TimeMSE()
+
+        self.params, self.grads = [], []
+
+        for layer in self.layers:
+            self.params += layer.params
+            self.grads += layer.grads
+
+
+    def predict(self, xs):
+        xs = np.array(xs)
+        for layer in self.layers:
+            xs = layer.forward(xs)
+        return xs
+
+    def forward(self, xs, ts):
+        xs = np.array(xs)
+        ts = np.array(ts)
+        for layer in self.layers:
+            xs = layer.forward(xs)
+        loss = self.loss_layer.forward(xs, ts)
+        return loss
+
+    def backward(self, dy = 1):
+        dy = self.loss_layer.backward(dy)
+        for layer in reversed(self.layers):
+            dy = layer.backward(dy)
+        return dy
+
+    def fit(self, train_X=None, train_y=None,learning_rate=0.01, epochs=10, batch_size=32, verbose=0):
+        optimizer = Adam(learning_rate)
+
+        data_size = train_X.shape[0]
+        max_iters = data_size//batch_size
+
+        for epoch in range(1, epochs+1):
+            idx = numpy.random.permutation(numpy.arange(data_size))
+            train_X = train_X[idx]
+            train_y = train_y[idx]
+
+            epoch_loss = 0
+            start_time=time.time()
+            
+            for iter in range(max_iters):
+                batch_x = train_X[iter*batch_size:(iter+1)*batch_size]
+                batch_y = train_y[iter*batch_size:(iter+1)*batch_size]
+
+                loss = self.forward(batch_x, batch_y)
+                self.backward()
+                params, grads = self.params, self.grads
+                optimizer.update(params, grads)
+
+                epoch_loss += loss
+            avg_loss = epoch_loss/max_iters
+
+            if verbose:
+                duration = start_time-time.time()
+                print(f'epoch:{epoch}/{epochs}, ì‹œê°„:{duration:.2f}[s], loss:{avg_loss:.5f}')
+
+
+    def reset_state(self):
+        self.layers[0].reset_state()
