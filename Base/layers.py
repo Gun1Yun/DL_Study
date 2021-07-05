@@ -424,12 +424,12 @@ class GRU(object):
 
         Wxz, Wxr, Wx = Wx_[:, :H], Wx_[:, H:2*H], Wx_[:, 2*H:]
         Whz, Whr, Wh = Wh_[:, :H], Wh_[:, H:2*H], Wh_[:, 2*H:]
-        bz, br, b = b_[:, :H], b_[:, H:2*H], b_[:, 2*H:]
+        bz, br, b = b_[:H], b_[H:2*H], b_[2*H:]
 
         z = sigmoid(self.affine(x, Wxz, h_prev, Whz, bz))
         r = sigmoid(self.affine(x, Wxr, h_prev, Whr, br))
         h_hat = np.tanh(self.affine(x, Wx, r*h_prev, Wh, b))
-        h_next = (1-z)*h_prev, z*h_hat
+        h_next = (1-z)*h_prev + z*h_hat
 
         self.cache = (x, h_prev, z, r, h_hat)
 
@@ -460,7 +460,7 @@ class GRU(object):
 
         # r
         dr = dh_r*h_prev
-        drs = dr*r(1-r)
+        drs = dr*r*(1-r)
         dx_r = np.matmul(drs, Wxr.T)
         dWx_r = np.matmul(x.T, drs)
         dh_r = np.matmul(drs, Whr.T)
@@ -469,16 +469,16 @@ class GRU(object):
 
         # z
         dz = dh_next*h_hat - dh_next*h_prev
-        dzs = dz*z(1-z)
+        dzs = dz*z*(1-z)
         dx_z = np.matmul(dzs, Wxz.T)
         dWx_z = np.matmul(x.T, dzs)
         dh_z = np.matmul(dzs, Whz.T)
         dWh_z = np.matmul(h_prev.T, dzs)
         db_z = np.sum(dzs, axis=0)
 
-        dWx = np.hstack(dWx_hat, dWx_r, dWx_z)
-        dWh = np.hstack(dWh_hat, dWh_r, dWh_z)
-        db = np.hstack(db_hat, db_r, db_z)
+        dWx = np.hstack((dWx_hat, dWx_r, dWx_z))
+        dWh = np.hstack((dWh_hat, dWh_r, dWh_z))
+        db = np.hstack((db_hat, db_r, db_z))
 
         dx = dx_hat + dx_r + dx_z
         dh_prev += (dh_hat + dh_r + dh_z)
@@ -509,10 +509,11 @@ class TimeGRU(object):
         # xs is x sequences
         Wx, Wh, b = self.params
         N, T, D = xs.shape  # batch, time step, dimension
+        self.T = T
         H = Wh.shape[0]     # hidden size
 
         self.layers = []
-        hs = np.empty((N, T, D), dtype='f')     # save h0 to ht
+        hs = np.empty((N, T, H), dtype='f')     # save h0 to ht
 
         # initialize h
         if not self.stateful or self.h is None:
@@ -524,21 +525,26 @@ class TimeGRU(object):
             self.h = layer.forward(xs[:, t, :], self.h)
             hs[:, t, :] = self.h
             self.layers.append(layer)
-
+        
+        # many to one
+        hs = hs[:, -1, :]  # return last states
+        
         return hs
 
-    def backward(self, dhs=1):
+    def backward(self, dhs):
         Wx, Wh, b = self.params
-        N, T, H = dhs.shape
+        N, H = dhs.shape
+        T = self.T
         D = Wx.shape[0]
 
         dxs = np.empty((N, T, D), dtype='f')
         dh = 0
+        dh = dhs
 
         grads = [0, 0, 0]       # grads for Wx, Wh, b
         for t in reversed(range(T)):    # backpropagation through time
             layer = self.layers[t]
-            dx, dh = layer.backward(dhs[:, t, :]+dh)
+            dx, dh = layer.backward(dh)
             dxs[:, t, :] = dx
             for i, grad in enumerate(layer.grads):
                 grads[i] += grad
