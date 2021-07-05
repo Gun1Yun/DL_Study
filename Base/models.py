@@ -197,9 +197,9 @@ class GruModelReg:
         rand = np.random.randn
 
         # weights (Xavier)
-        gru_Wx = (rand(F, 4*H)/ np.sqrt(F)).astype('f')
-        gru_Wh = (rand(H, 4*H)/ np.sqrt(H)).astype('f')
-        gru_b = np.zeros(4*H).astype('f')
+        gru_Wx = (rand(F, 3*H)/ np.sqrt(F)).astype('f')
+        gru_Wh = (rand(H, 3*H)/ np.sqrt(H)).astype('f')
+        gru_b = np.zeros(3*H).astype('f')
 
         # He initialize
         fc_W1 = (rand(H, H2)/ np.sqrt(H/2)).astype('f')
