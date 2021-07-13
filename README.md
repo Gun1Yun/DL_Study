@@ -13,6 +13,7 @@ Study deep architectures and concepts.
 ## RNN
 - RNN 
 - LSTM 
+- 
 
 ## Dataset
 - UCI Repository
