@@ -6,3 +6,7 @@ terminal.ipynb
 # ignore folder
 __pycache__/
 datasets/
+
+# all folder
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
