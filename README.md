@@ -13,6 +13,8 @@ Study deep architectures and concepts.
 ## RNN
 - RNN 
 - LSTM 
+- GRU
+- Encoder-Decoder
 
 ## Dataset
 - UCI Repository
