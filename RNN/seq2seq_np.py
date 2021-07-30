@@ -309,7 +309,7 @@ class Seq2Seq:
         xs = np.array(xs)
         h = self.encoder.forward(xs)
 
-        dec_in = np.zeros((xs.shape[0], xs.shape[2]))
+        dec_in = np.zeros((xs.shape[0], 1, xs.shape[2]))
         dec_out = self.decoder.forward(dec_in, h)
 
         return dec_out
@@ -396,12 +396,16 @@ class PeekyDecoder:
         self.cache = None
 
     def forward(self, xs, h):
-        N, T = xs.shape
+        N, T, D = xs.shape
         N, H = h.shape
+
+        xs = np.array(xs)
 
         self.layers[0].set_state(h)
 
         hs = np.repeat(h, T, axis=0).reshape(N, T, H)
+
+        xs = np.concatenate((hs, xs), axis=2)
         out = self.layers[0].forward(xs)
         out = np.concatenate((hs, out), axis=2)
 
